@@ -115,6 +115,7 @@ void CompactorObject::initList() {
 void CompactorObject::start() {
 	if (!openBinlog() || !readHeader() || !openCompact()) {
 		fail();
+		return;
 	}
 	if (_settings.trackEstimatedTime) {
 		initList<MultiStoreWithTime>();

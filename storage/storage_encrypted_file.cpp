@@ -7,6 +7,7 @@
 #include "storage/storage_encrypted_file.h"
 
 #include "base/openssl_help.h"
+#include "base/platform/base_platform_file_utilities.h"
 
 namespace Storage {
 namespace {
@@ -99,8 +100,10 @@ File::Result File::attemptOpenForReadAppend(const EncryptionKey &key) {
 }
 
 File::Result File::attemptOpenForWrite(const EncryptionKey &key) {
-	if (!_lock.lock(_data, QIODevice::WriteOnly)) {
+	if (!_lock.lock(_data, QIODevice::ReadWrite)) {
 		return Result::LockFailed;
+	} else if (!_data.resize(0)) {
+		return Result::Failed;
 	}
 	return writeHeader(key) ? Result::Success : Result::Failed;
 }
@@ -110,7 +113,8 @@ bool File::writeHeader(const EncryptionKey &key) {
 	Expects(_data.pos() == 0);
 
 	const auto magic = bytes::make_span("TDEF");
-	if (!writePlain(magic.subspan(0, base::FileLock::kSkipBytes))) {
+	if (writePlain(magic.subspan(0, base::FileLock::kSkipBytes))
+		!= base::FileLock::kSkipBytes) {
 		return false;
 	}
 
@@ -331,16 +335,13 @@ bool File::Move(const QString &from, const QString &to) {
 	if (destination.exists()) {
 		{
 			base::FileLock locker;
-			if (!locker.lock(destination, QIODevice::WriteOnly)) {
+			if (!locker.lock(destination, QIODevice::ReadWrite)) {
 				return false;
 			}
 		}
 		destination.close();
-		if (!destination.remove()) {
-			return false;
-		}
 	}
-	return source.rename(to);
+	return base::Platform::RenameWithOverwrite(from, to);
 }
 
 
